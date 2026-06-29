@@ -1,0 +1,23 @@
+# Env / secrets
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Runtime data (KB lives here)
+data/*.db
+data/*.sqlite*
+data/cache/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Personal deployment notes (may contain hostnames / reminders)
+DEPLOYMENT.md

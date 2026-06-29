@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Magpie</title>
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+  <!-- Handwriting + body fonts (free). Falls back to system cursive if offline. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <!-- AUTH GATE — covers the app until a session exists. Shown by app.js. -->
+  <div id="auth-gate" class="auth-gate" hidden>
+    <div class="auth-card">
+      <img src="assets/logo.svg" alt="" class="auth-logo" />
+      <h2>Magpie</h2>
+      <p class="auth-tag">forage the shiny, hoard the useful</p>
+      <div class="auth-tabs">
+        <button id="tab-login" class="auth-tab active" type="button">Log in</button>
+        <button id="tab-signup" class="auth-tab" type="button">Sign up</button>
+      </div>
+      <form id="auth-form" class="auth-form" autocomplete="on">
+        <label id="name-row" hidden>Name
+          <input id="auth-name" autocomplete="name" placeholder="optional" />
+        </label>
+        <label>Email
+          <input id="auth-email" type="email" autocomplete="email" required />
+        </label>
+        <label>Password
+          <input id="auth-password" type="password" autocomplete="current-password"
+                 required minlength="8" />
+        </label>
+        <p id="auth-error" class="auth-error" hidden></p>
+        <button type="submit" id="auth-submit">Log in</button>
+      </form>
+      <div id="google-row" class="google-row" hidden>
+        <div class="auth-or">or</div>
+        <a id="google-btn" class="google-btn" href="/api/auth/google/login">Continue with Google</a>
+      </div>
+    </div>
+  </div>
+
+  <header class="topbar">
+    <div class="brand">
+      <img src="assets/logo.svg" alt="Magpie logo" class="logo" />
+      <div class="wordmark">
+        <h1>Magpie</h1>
+        <span class="tagline">forage the shiny, hoard the useful</span>
+      </div>
+    </div>
+    <nav class="tabs" id="tabs">
+      <button data-view="discover" class="active">Discover <kbd>1</kbd></button>
+      <button data-view="history">History <kbd>2</kbd></button>
+      <button data-view="hoard">Hoard <kbd>3</kbd></button>
+      <button data-view="path">Path <kbd>4</kbd></button>
+      <button data-view="onboard">Profile <kbd>5</kbd></button>
+      <button data-view="status">Status <kbd>6</kbd></button>
+      <button id="theme-toggle" class="icon-btn" title="Toggle dark mode (t)">🌙</button>
+      <span id="user-box" class="user-box" hidden>
+        <span id="user-email" class="user-email" title=""></span>
+        <button id="logout-btn" class="icon-btn" type="button" title="Log out">⎋</button>
+      </span>
+    </nav>
+  </header>
+
+  <main>
+    <!-- DISCOVER -->
+    <section id="view-discover" class="view active">
+      <p class="scribble">what do you want to learn today?</p>
+      <form id="discover-form" class="search">
+        <input id="prompt" type="text" autocomplete="off"
+               placeholder="what's new in… (e.g. Python backend performance)" />
+        <button type="submit">Forage</button>
+      </form>
+      <div id="discover-status" class="status-line"></div>
+      <div class="suggest-row">
+        <span class="suggest-label">next for you:</span>
+        <span id="suggestions" class="suggestions"></span>
+        <button id="refresh-suggest" class="icon-btn" title="Suggest topics">✨</button>
+      </div>
+      <p class="hint">press <kbd>/</kbd> to search · <kbd>1–5</kbd> to switch tabs · <kbd>t</kbd> for theme</p>
+      <div id="cards" class="cards"></div>
+    </section>
+
+    <!-- HISTORY -->
+    <section id="view-history" class="view">
+      <p class="scribble">past hunts — revisit what you found</p>
+      <div id="history" class="history"></div>
+      <div id="history-cards" class="cards"></div>
+    </section>
+
+    <!-- HOARD -->
+    <section id="view-hoard" class="view">
+      <p class="scribble">your hoard — everything you've learned</p>
+      <div class="hoard-toolbar">
+        <span class="seg">
+          <button id="view-list" class="seg-btn active">List</button>
+          <button id="view-graph" class="seg-btn">Graph</button>
+        </span>
+        <span class="export">
+          export:
+          <a href="/api/export?format=md" download>Markdown</a>
+          <a href="/api/export?format=json" download>JSON</a>
+          <a href="/api/export?format=anki" download>Anki</a>
+        </span>
+      </div>
+      <div id="hoard" class="hoard"></div>
+      <svg id="hoard-graph" class="graph" style="display:none"></svg>
+    </section>
+
+    <!-- PATH / ROADMAP -->
+    <section id="view-path" class="view">
+      <p class="scribble">your learning path — step by step</p>
+      <button id="build-roadmap" class="seg-btn">Build my roadmap ✨</button>
+      <ol id="roadmap" class="roadmap"></ol>
+    </section>
+
+    <!-- PROFILE / ONBOARD -->
+    <section id="view-onboard" class="view">
+      <p class="scribble">tell Magpie what you know</p>
+      <div id="profile-summary" class="profile-summary"></div>
+      <form id="onboard-form" class="onboard">
+        <label>Domains <small>(comma separated)</small>
+          <input id="domains" placeholder="Backend, DevOps, ML" />
+        </label>
+        <div id="skills-fields"></div>
+        <label>Topics you already know <small>(optional)</small>
+          <input id="known" placeholder="REST APIs, Docker basics" />
+        </label>
+        <button type="submit">Save profile</button>
+      </form>
+    </section>
+
+    <!-- STATUS -->
+    <section id="view-status" class="view">
+      <p class="scribble">is everything wired up?</p>
+      <div id="status-box" class="status-box">Checking…</div>
+    </section>
+  </main>
+
+  <script src="js/app.js"></script>
+</body>
+</html>

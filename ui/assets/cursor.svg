@@ -1,0 +1,5 @@
+<!-- PLACEHOLDER default cursor (hotspot ~4,2). Replace with your own.
+     Tip: 32x32 max for broad browser support; PNG is safest cross-browser. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+  <path d="M4 2l14 7-6 1.5L9 18 4 2z" fill="#14161a" stroke="#fff" stroke-width="1.2"/>
+</svg>
