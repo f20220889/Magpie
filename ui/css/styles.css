@@ -273,6 +273,9 @@ kbd {
     var(--paper);
 }
 .auth-gate[hidden] { display: none; }
+/* hide app shell until boot() resolves auth — prevents UI flash before login */
+body.booting .topbar,
+body.booting main { display: none; }
 .auth-card {
   width: 100%;
   max-width: 360px;

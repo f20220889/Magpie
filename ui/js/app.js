@@ -63,6 +63,7 @@ document.addEventListener("keydown", (e) => {
 const STAGE_LABEL = {
   plan: "planning what to search…",
   search: "searching the web…",
+  shortlist: "picking the best leads…",
   scrape: "reading articles…",
   rank: "ranking by relevance to you…",
 };
@@ -539,4 +540,4 @@ async function boot() {
   } catch (_) { /* fall through to login */ }
   showAuthGate();
 }
-boot();
+boot().finally(() => document.body.classList.remove("booting"));
