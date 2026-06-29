@@ -30,8 +30,12 @@
           <input id="auth-email" type="email" autocomplete="email" required />
         </label>
         <label>Password
-          <input id="auth-password" type="password" autocomplete="current-password"
-                 required minlength="8" />
+          <div class="pw-wrap">
+            <input id="auth-password" type="password" autocomplete="current-password"
+                   required minlength="8" />
+            <button type="button" id="pw-toggle" class="pw-toggle"
+                    aria-label="Show password" aria-pressed="false">Show</button>
+          </div>
         </label>
         <p id="auth-error" class="auth-error" hidden></p>
         <button type="submit" id="auth-submit">Log in</button>

@@ -331,6 +331,21 @@ kbd {
   font: 1rem var(--sans);
 }
 .auth-form input:focus { outline: 2px solid var(--teal); border-color: transparent; }
+.pw-wrap { position: relative; display: flex; }
+.pw-wrap input { flex: 1; padding-right: 3.5rem; }
+.pw-toggle {
+  position: absolute;
+  right: 0.4rem;
+  top: 50%;
+  transform: translateY(-50%);
+  border: none;
+  background: none;
+  color: var(--teal);
+  font: 0.8rem var(--sans);
+  cursor: pointer;
+  padding: 0.2rem 0.4rem;
+}
+.pw-toggle:hover { text-decoration: underline; }
 .auth-error {
   margin: 0;
   padding: 0.5rem 0.7rem;

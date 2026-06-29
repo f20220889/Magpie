@@ -474,6 +474,16 @@ function setAuthMode(mode) {
 $("#tab-login").addEventListener("click", () => setAuthMode("login"));
 $("#tab-signup").addEventListener("click", () => setAuthMode("signup"));
 
+$("#pw-toggle").addEventListener("click", () => {
+  const input = $("#auth-password");
+  const btn = $("#pw-toggle");
+  const show = input.type === "password";
+  input.type = show ? "text" : "password";
+  btn.textContent = show ? "Hide" : "Show";
+  btn.setAttribute("aria-pressed", String(show));
+  btn.setAttribute("aria-label", show ? "Hide password" : "Show password");
+});
+
 function showAuthGate() {
   $("#auth-gate").hidden = false;
   $("#user-box").hidden = true;
