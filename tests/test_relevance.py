@@ -64,3 +64,41 @@ def test_penalizes_partial_overlap():
 
 def test_empty_cards():
     assert RelevanceEngine(embed_fn=lambda t: []).rank([], "q", PROFILE, []) == []
+
+
+def test_min_score_drops_off_topic():
+    # "off" is orthogonal to the query (score 0); a floor above 0 drops it.
+    embed = make_embedder({"QUERY": [1, 0, 0], "on": [1, 0, 0], "off": [0, 1, 0]})
+    eng = RelevanceEngine(embed_fn=embed)
+    ranked = eng.rank([_card("on"), _card("off")], "QUERY", PROFILE, [], min_score=0.5)
+    assert [c.title for c in ranked] == ["on"]
+
+
+def test_dedup_collapses_near_identical_cards():
+    # two cards with (near-)identical vectors -> only the first survives dedup.
+    embed = make_embedder({"QUERY": [1, 0, 0], "a": [1, 0, 0], "b": [1, 0, 0]})
+    eng = RelevanceEngine(embed_fn=embed)
+    cards = [_card("a"), _card("b")]
+    assert len(eng.rank(cards, "QUERY", PROFILE, [])) == 2  # off by default
+    deduped = eng.rank(cards, "QUERY", PROFILE, [], dedup_threshold=0.92)
+    assert len(deduped) == 1
+
+
+def test_shortlist_picks_most_relevant():
+    embed = make_embedder(
+        {"QUERY": [1, 0, 0], "hit": [1, 0, 0], "miss": [0, 1, 0]}
+    )
+    eng = RelevanceEngine(embed_fn=embed)
+    cands = [("miss", "http://m", "miss"), ("hit", "http://h", "hit")]
+    picked = eng.shortlist(cands, "QUERY", PROFILE, k=1)
+    assert [c[1] for c in picked] == ["http://h"]
+
+
+def test_shortlist_skips_embed_when_under_k():
+    # When pool <= k there is nothing to trim, so it must not even embed.
+    def boom(texts):
+        raise AssertionError("should not embed when pool <= k")
+
+    eng = RelevanceEngine(embed_fn=boom)
+    cands = [("a", "http://a", "s")]
+    assert eng.shortlist(cands, "QUERY", PROFILE, k=8) == cands

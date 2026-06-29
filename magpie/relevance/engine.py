@@ -25,6 +25,9 @@ from magpie.knowledge.models import TopicCard
 DROP_THRESHOLD = 0.88   # >= this vs a learned topic => already known, drop it
 PENALTY_THRESHOLD = 0.70  # >= this => partial overlap, down-rank
 PENALTY_WEIGHT = 0.5    # how much overlap subtracts from the score
+# >= this between two surfaced cards => same story mirrored across sites; keep
+# only the higher-scored one so one run never shows the same thing twice.
+WITHIN_DEDUP_THRESHOLD = 0.92
 
 # How much learned feedback nudges the score (small — relevance still leads).
 SOURCE_WEIGHT = 0.10    # per-host preference from signals
@@ -59,6 +62,35 @@ class RelevanceEngine:
 
         return embed(texts)
 
+    def shortlist(
+        self,
+        candidates: list[tuple[str, str, str]],
+        prompt: str,
+        profile: dict,
+        k: int,
+    ) -> list[tuple[str, str, str]]:
+        """Pick the ``k`` candidates whose title+snippet best match the query.
+
+        Run BEFORE scraping so the slow fetch is spent only on the most
+        promising URLs rather than the first N we happened to find.
+        ``candidates`` are ``(title, url, snippet)`` tuples.
+        """
+        if k <= 0:
+            return []
+        if len(candidates) <= k:
+            return candidates  # nothing to trim — skip the embed call entirely
+
+        query_text = _profile_text(prompt, profile)
+        cand_texts = [f"{title} {snippet}".strip() for title, _, snippet in candidates]
+        vecs = self._embed([query_text] + cand_texts)
+        query_vec = vecs[0]
+        scored = sorted(
+            zip(candidates, vecs[1:]),
+            key=lambda cv: _dot(cv[1], query_vec),
+            reverse=True,
+        )
+        return [cand for cand, _ in scored[:k]]
+
     def rank(
         self,
         cards: list[TopicCard],
@@ -67,12 +99,17 @@ class RelevanceEngine:
         learned_titles: list[str],
         source_scores: dict[str, float] | None = None,
         tag_scores: dict[str, float] | None = None,
+        min_score: float = 0.0,
+        dedup_threshold: float | None = None,
     ) -> list[TopicCard]:
         """Return cards sorted by relevance, deduped against learned topics.
 
         ``source_scores`` / ``tag_scores`` are per-host / per-tag preferences in
         [-1, 1] learned from user feedback; they apply a small boost/penalty so
         ranking adapts over time without overriding semantic relevance.
+        ``min_score`` drops cards whose final score falls below it (off-topic).
+        ``dedup_threshold`` (when set) collapses near-identical cards within the
+        result, keeping the highest-scored of each near-duplicate group.
         """
         if not cards:
             return []
@@ -90,7 +127,7 @@ class RelevanceEngine:
         card_vecs = vecs[1 : 1 + len(cards)]
         learned_vecs = vecs[1 + len(cards) :]
 
-        ranked: list[TopicCard] = []
+        scored: list[tuple[TopicCard, list[float]]] = []
         for card, cvec in zip(cards, card_vecs):
             score = _dot(cvec, query_vec)
 
@@ -108,8 +145,23 @@ class RelevanceEngine:
                 tag_pref = sum(tag_scores.get(t, 0.0) for t in card.tags) / len(card.tags)
                 score += TAG_WEIGHT * tag_pref
 
-            card.relevance_score = round(score, 4)
-            ranked.append(card)
+            if score < min_score:
+                continue  # below the relevance floor — off-topic, drop it
 
-        ranked.sort(key=lambda c: c.relevance_score, reverse=True)
+            card.relevance_score = round(score, 4)
+            scored.append((card, cvec))
+
+        scored.sort(key=lambda cs: cs[0].relevance_score, reverse=True)
+        if dedup_threshold is None:
+            return [card for card, _ in scored]
+
+        # Collapse near-identical cards (same story mirrored across sites):
+        # keep the highest-scored, drop later near-duplicates.
+        ranked: list[TopicCard] = []
+        kept_vecs: list[list[float]] = []
+        for card, cvec in scored:
+            if any(_dot(cvec, kv) >= dedup_threshold for kv in kept_vecs):
+                continue
+            ranked.append(card)
+            kept_vecs.append(cvec)
         return ranked

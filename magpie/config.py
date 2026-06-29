@@ -56,6 +56,14 @@ class Settings(BaseSettings):
     max_results: int = 8
     scrape_timeout: int = 15
 
+    # Relevance. Candidates are shortlisted by snippet relevance BEFORE the slow
+    # scrape, so fetches are spent on the most promising URLs (not the first N).
+    # candidate_pool bounds how many search hits are scored before shortlisting
+    # (keeps embedding cost predictable). Final cards scoring below min_relevance
+    # (cosine vs the query) are dropped as off-topic.
+    candidate_pool: int = 40
+    min_relevance: float = 0.12
+
     # Scraper HTTP — a realistic User-Agent avoids bot-walls that serve 403s or
     # empty shells to default clients (a top cause of inaccurate/missing cards).
     scrape_user_agent: str = (

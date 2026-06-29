@@ -11,7 +11,7 @@ from magpie.agent.query_planner import QueryPlanner
 from magpie.config import settings
 from magpie.knowledge.models import CardStatus, TopicCard
 from magpie.knowledge.store import KnowledgeStore
-from magpie.relevance.engine import RelevanceEngine
+from magpie.relevance.engine import WITHIN_DEDUP_THRESHOLD, RelevanceEngine
 from magpie.scraper.extractor import fetch_and_extract
 from magpie.search.base import get_search_provider
 from magpie.summarize.summarizer import Summarizer
@@ -22,6 +22,16 @@ Progress = Callable[[str, str], None]
 
 def _noop(stage: str, message: str) -> None:  # pragma: no cover
     pass
+
+
+def _interleave(groups: list[list[tuple[str, str, str]]]) -> list[tuple[str, str, str]]:
+    """Round-robin merge so no single query dominates the candidate pool."""
+    out: list[tuple[str, str, str]] = []
+    for i in range(max((len(g) for g in groups), default=0)):
+        for g in groups:
+            if i < len(g):
+                out.append(g[i])
+    return out
 
 
 class Orchestrator:
@@ -43,20 +53,31 @@ class Orchestrator:
             progress("plan", "planning search queries")
             queries = self.planner.plan(prompt, profile, learned)
 
-            # Gather candidate URLs across queries, deduped, capped.
+            # Gather candidates across queries, deduped by URL and interleaved
+            # so each query contributes fairly, then bounded to keep the
+            # shortlist embedding cost predictable.
             seen_urls: set[str] = set()
-            candidates: list[tuple[str, str]] = []  # (title, url)
+            per_query: list[list[tuple[str, str, str]]] = []  # (title, url, snippet)
             for q in queries:
                 progress("search", f"searching: {q}")
+                hits: list[tuple[str, str, str]] = []
                 for r in self.search.search(q, max_results=settings.max_results):
                     if r.url and r.url not in seen_urls:
                         seen_urls.add(r.url)
-                        candidates.append((r.title, r.url))
-            candidates = candidates[: settings.max_results]
+                        hits.append((r.title, r.url, r.snippet))
+                per_query.append(hits)
+            candidates = _interleave(per_query)[: settings.candidate_pool]
+
+            # Shortlist by title+snippet relevance BEFORE the slow scrape, so we
+            # only fetch the most promising pages.
+            progress("shortlist", f"shortlisting {len(candidates)} candidates")
+            candidates = self.ranker.shortlist(
+                candidates, prompt, profile, k=settings.max_results
+            )
 
             # Scrape + summarize each candidate; skip failures silently.
             cards: list[TopicCard] = []
-            for title, url in candidates:
+            for title, url, _snippet in candidates:
                 progress("scrape", f"reading: {title or url}")
                 content = fetch_and_extract(url)
                 if not content:
@@ -73,6 +94,8 @@ class Orchestrator:
                 cards, prompt, profile, learned,
                 source_scores=self.store.source_scores(),
                 tag_scores=self.store.tag_scores(),
+                min_score=settings.min_relevance,
+                dedup_threshold=WITHIN_DEDUP_THRESHOLD,
             )
 
             # Persist surfaced cards (assign DB ids for the learn step).

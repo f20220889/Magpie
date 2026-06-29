@@ -29,6 +29,9 @@ class FakeSummarizer:
 
 
 class FakeRanker:
+    def shortlist(self, candidates, prompt, profile, k):
+        return candidates[:k]  # identity (test pool is smaller than k anyway)
+
     def rank(self, cards, prompt, profile, learned, **kwargs):
         return cards  # identity
 
