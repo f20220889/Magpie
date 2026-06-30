@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import hashlib
 import math
+import sys
 from functools import lru_cache
 
 import httpx
@@ -85,6 +86,9 @@ _PROVIDERS = {
 }
 
 
+_warned_local_fallback = False
+
+
 def embed(texts: list[str]) -> list[list[float]]:
     provider = (settings.embedding_provider or "local").strip().lower()
     fn = _PROVIDERS.get(provider)
@@ -92,4 +96,19 @@ def embed(texts: list[str]) -> list[list[float]]:
         raise LLMError(
             f"unknown EMBEDDING_PROVIDER '{provider}'. options: {', '.join(_PROVIDERS)}"
         )
+    if provider == "local":
+        # sentence-transformers/torch are omitted from slim deploys. Rather than
+        # 500 the whole run, degrade to the keyless hash embedder.
+        try:
+            return _local_embed(texts)
+        except ImportError:
+            global _warned_local_fallback
+            if not _warned_local_fallback:
+                _warned_local_fallback = True
+                print(
+                    "magpie: sentence-transformers not installed; using 'hash' "
+                    "embeddings. Set EMBEDDING_PROVIDER=hash to silence this.",
+                    file=sys.stderr,
+                )
+            return _hash_embed(texts)
     return fn(texts)

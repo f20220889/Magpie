@@ -51,3 +51,41 @@ def test_roadmap_orders_and_dedupes(make_llm):
 def test_roadmap_caps(make_llm):
     llm = make_llm({"roadmap": [{"topic": f"T{i}"} for i in range(20)]})
     assert len(RoadmapBuilder(llm=llm).build({"domains": []}, [], n=4)) == 4
+
+
+def _authed_client(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from magpie.config import settings
+    from magpie.web.server import app
+
+    monkeypatch.setattr(settings, "db_path", str(tmp_path / "llmfail.db"))
+    c = TestClient(app)
+    r = c.post("/api/auth/signup", json={"email": "p@t.local", "password": "password123"})
+    assert r.status_code == 200, r.text
+    return c
+
+
+def test_suggestions_llm_error_returns_503_not_500(tmp_path, monkeypatch):
+    import magpie.agent.adjacency as adj
+    from magpie.llm.base import LLMError
+
+    def boom(self, *a, **k):
+        raise LLMError("groq: no API key. Set GROQ_API_KEY.")
+
+    monkeypatch.setattr(adj.AdjacencySuggester, "suggest", boom)
+    r = _authed_client(tmp_path, monkeypatch).get("/api/suggestions")
+    assert r.status_code == 503
+    assert "API key" in r.json()["detail"]
+
+
+def test_roadmap_llm_error_returns_503_not_500(tmp_path, monkeypatch):
+    import magpie.agent.roadmap as rm
+    from magpie.llm.base import LLMError
+
+    def boom(self, *a, **k):
+        raise LLMError("groq: no API key.")
+
+    monkeypatch.setattr(rm.RoadmapBuilder, "build", boom)
+    r = _authed_client(tmp_path, monkeypatch).get("/api/roadmap")
+    assert r.status_code == 503

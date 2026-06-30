@@ -117,3 +117,18 @@ def test_unknown_embedding_provider_raises(monkeypatch):
     monkeypatch.setattr(em.settings, "embedding_provider", "nope")
     with pytest.raises(LLMError):
         em.embed(["x"])
+
+
+def test_local_embedding_falls_back_to_hash_when_missing(monkeypatch):
+    # Slim deploys omit sentence-transformers; embed() must degrade, not crash.
+    from magpie.relevance import embeddings as em
+
+    monkeypatch.setattr(em.settings, "embedding_provider", "local")
+
+    def _no_sentence_transformers(texts):
+        raise ImportError("No module named 'sentence_transformers'")
+
+    monkeypatch.setattr(em, "_local_embed", _no_sentence_transformers)
+    out = em.embed(["hello world"])
+    assert len(out) == 1 and len(out[0]) == em._HASH_DIM   # a hash vector
+    assert abs(math.sqrt(sum(x * x for x in out[0])) - 1.0) < 1e-6  # normalized

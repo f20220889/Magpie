@@ -162,16 +162,25 @@ def post_discover(body: DiscoverBody, user: dict = Depends(require_user)) -> dic
 @app.get("/api/suggestions")
 def get_suggestions(n: int = 5, store: KnowledgeStore = Depends(user_store)) -> dict:
     from magpie.agent.adjacency import AdjacencySuggester
+    from magpie.llm.base import LLMError
 
-    items = AdjacencySuggester().suggest(store.profile(), store.learned_titles(), n)
+    try:
+        items = AdjacencySuggester().suggest(store.profile(), store.learned_titles(), n)
+    except LLMError as e:
+        # LLM unreachable/misconfigured -> a clean 503 the UI can show, not a 500.
+        raise HTTPException(status_code=503, detail=str(e)) from e
     return {"suggestions": items}
 
 
 @app.get("/api/roadmap")
 def get_roadmap(n: int = 6, store: KnowledgeStore = Depends(user_store)) -> dict:
     from magpie.agent.roadmap import RoadmapBuilder
+    from magpie.llm.base import LLMError
 
-    steps = RoadmapBuilder().build(store.profile(), store.learned_titles(), n)
+    try:
+        steps = RoadmapBuilder().build(store.profile(), store.learned_titles(), n)
+    except LLMError as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
     return {"roadmap": steps}
 
 

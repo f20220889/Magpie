@@ -12,7 +12,11 @@ async function api(path, opts = {}) {
     showAuthGate();
     throw new Error("not authenticated");
   }
-  if (!res.ok) throw new Error(`${path} → ${res.status}`);
+  if (!res.ok) {
+    // Surface the server's error detail (e.g. "groq: no API key") when present.
+    const body = await res.json().catch(() => null);
+    throw new Error((body && body.detail) || `${path} → ${res.status}`);
+  }
   return res.json();
 }
 
