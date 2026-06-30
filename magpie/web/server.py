@@ -12,12 +12,13 @@ import queue
 import threading
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from magpie.config import settings
 from magpie.knowledge.models import CardStatus
 from magpie.knowledge.store import SIGNAL_WEIGHTS, KnowledgeStore
 from magpie.web.auth import router as auth_router
@@ -118,6 +119,34 @@ def post_init(body: InitBody, store: KnowledgeStore = Depends(user_store)) -> di
     for topic in body.known:
         store.add_learned_topic(title=topic, summary="(seeded at onboarding)")
     return store.profile()
+
+
+@app.post("/api/skills/extract")
+def extract_skills(
+    file: UploadFile = File(...), user: dict = Depends(require_user)
+) -> dict:
+    """Read an uploaded resume (PDF/Word/image/text) and return suggested skills.
+
+    Returns ``{domains: [{name, skills:[...]}]}`` for the user to verify in the
+    UI; nothing is saved here. The verified result is persisted via /api/init.
+    """
+    from magpie.ingest.resume import IngestError, extract_skills_from_upload
+    from magpie.llm.base import LLMError
+
+    data = file.file.read()
+    limit = settings.max_upload_mb * 1024 * 1024
+    if len(data) > limit:
+        raise HTTPException(
+            status_code=413, detail=f"file too large (max {settings.max_upload_mb} MB)"
+        )
+    try:
+        return extract_skills_from_upload(
+            file.filename or "", file.content_type or "", data
+        )
+    except IngestError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except LLMError as e:
+        raise HTTPException(status_code=502, detail=str(e)) from e
 
 
 @app.post("/api/discover")

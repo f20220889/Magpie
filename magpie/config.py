@@ -13,6 +13,9 @@ class Settings(BaseSettings):
     #   groq | gemini | openrouter | cerebras | mistral | together
     llm_provider: str = "ollama"
     llm_model: str = ""        # blank => the provider's free default
+    # Vision-capable model for reading image resumes (OCR via the LLM). Blank =>
+    # the hosted client reuses llm_model; Ollama falls back to "llama3.2-vision".
+    llm_vision_model: str = ""
     llm_timeout: int = 60
 
     # LLM (Ollama, local)
@@ -63,6 +66,9 @@ class Settings(BaseSettings):
     # (cosine vs the query) are dropped as off-topic.
     candidate_pool: int = 40
     min_relevance: float = 0.12
+
+    # Resume import: max upload size accepted by /api/skills/extract.
+    max_upload_mb: int = 8
 
     # Scraper HTTP — a realistic User-Agent avoids bot-walls that serve 403s or
     # empty shells to default clients (a top cause of inaccurate/missing cards).

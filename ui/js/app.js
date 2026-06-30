@@ -427,6 +427,144 @@ $("#onboard-form").addEventListener("submit", async (e) => {
   loadProfile();
 });
 
+// ---------- resume import ----------
+// Working copy of the extracted skills while the user verifies them.
+let pendingSkills = [];
+
+$("#resume-file").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const status = $("#resume-status");
+  status.hidden = false;
+  status.classList.remove("err");
+  status.textContent = "reading your resume…";
+  const fd = new FormData();
+  fd.append("file", file);
+  try {
+    // Not via api(): multipart must set its own Content-Type/boundary.
+    const res = await fetch("/api/skills/extract", { method: "POST", body: fd });
+    if (res.status === 401) { showAuthGate(); return; }
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `couldn't read that file (${res.status})`);
+    }
+    const data = await res.json();
+    pendingSkills = (data.domains || [])
+      .map((d) => ({ name: d.name, skills: [...new Set(d.skills || [])] }))
+      .filter((d) => d.name && d.skills.length);
+    if (!pendingSkills.length) {
+      status.classList.add("err");
+      status.textContent = "no skills found — try another file";
+      return;
+    }
+    status.hidden = true;
+    openSkillsModal();
+  } catch (err) {
+    status.classList.add("err");
+    status.textContent = err.message;
+  } finally {
+    e.target.value = ""; // let the same file be re-picked later
+  }
+});
+
+function openSkillsModal() {
+  renderSkillsModal();
+  $("#skills-modal").hidden = false;
+}
+function closeSkillsModal() {
+  $("#skills-modal").hidden = true;
+  pendingSkills = [];
+}
+
+function renderSkillsModal() {
+  const body = $("#skills-modal-body");
+  body.innerHTML =
+    pendingSkills
+      .map(
+        (d, di) => `<div class="skill-group">
+          <div class="skill-group-head">
+            <input class="domain-name" data-di="${di}" value="${escapeHtml(d.name)}" />
+            <button type="button" class="x-domain" data-di="${di}" title="remove domain">✕</button>
+          </div>
+          <div class="pills">${d.skills
+            .map(
+              (s, si) => `<span class="pill edit">${escapeHtml(s)}<button type="button"
+                  class="x-skill" data-di="${di}" data-si="${si}" aria-label="remove">✕</button></span>`
+            )
+            .join("")}</div>
+          <input class="add-skill" data-di="${di}" placeholder="add a skill, then Enter" />
+        </div>`
+      )
+      .join("") +
+    `<button type="button" id="add-domain" class="btn-ghost small">+ add domain</button>`;
+}
+
+$("#skills-modal-body").addEventListener("click", (e) => {
+  const t = e.target;
+  if (t.classList.contains("x-skill")) {
+    pendingSkills[+t.dataset.di].skills.splice(+t.dataset.si, 1);
+    renderSkillsModal();
+  } else if (t.classList.contains("x-domain")) {
+    pendingSkills.splice(+t.dataset.di, 1);
+    renderSkillsModal();
+  } else if (t.id === "add-domain") {
+    pendingSkills.push({ name: "New domain", skills: [] });
+    renderSkillsModal();
+    document.querySelector(`.domain-name[data-di="${pendingSkills.length - 1}"]`)?.select();
+  }
+});
+
+$("#skills-modal-body").addEventListener("keydown", (e) => {
+  const t = e.target;
+  if (!t.classList.contains("add-skill") || e.key !== "Enter") return;
+  e.preventDefault();
+  const di = +t.dataset.di;
+  const v = t.value.trim();
+  const skills = pendingSkills[di].skills;
+  if (v && !skills.some((s) => s.toLowerCase() === v.toLowerCase())) {
+    skills.push(v);
+    renderSkillsModal();
+    document.querySelector(`.add-skill[data-di="${di}"]`)?.focus();
+  } else {
+    t.value = "";
+  }
+});
+
+$("#skills-modal-body").addEventListener("change", (e) => {
+  if (e.target.classList.contains("domain-name")) {
+    pendingSkills[+e.target.dataset.di].name = e.target.value.trim() || "General";
+  }
+});
+
+$("#skills-cancel").addEventListener("click", closeSkillsModal);
+
+$("#skills-save").addEventListener("click", async () => {
+  // Pull in any domain-name edits that weren't blurred yet.
+  $$(".domain-name").forEach((i) => {
+    const d = pendingSkills[+i.dataset.di];
+    if (d) d.name = i.value.trim() || "General";
+  });
+  const domains = [];
+  const skills = {};
+  pendingSkills.forEach((d) => {
+    if (!d.name || !d.skills.length) return;
+    domains.push(d.name);
+    skills[d.name] = (skills[d.name] || []).concat(d.skills);
+  });
+  if (!domains.length) { closeSkillsModal(); return; }
+  const btn = $("#skills-save");
+  btn.disabled = true;
+  try {
+    await api("/api/init", { method: "POST", body: JSON.stringify({ domains, skills }) });
+    closeSkillsModal();
+    loadProfile();
+  } catch (err) {
+    alert(`Could not save: ${err.message}`);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 // ---------- status ----------
 async function loadStatus() {
   const box = $("#status-box");

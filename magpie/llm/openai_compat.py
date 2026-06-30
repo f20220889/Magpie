@@ -82,6 +82,49 @@ class OpenAICompatClient:
         except json.JSONDecodeError as e:
             raise LLMError(f"{self.provider} did not return valid JSON: {raw[:200]}") from e
 
+    def complete_vision_json(
+        self, prompt: str, image_b64: str, mime: str, system: str | None = None
+    ) -> dict | list:
+        """Send an image (as a data URI) + prompt to a vision model, parse JSON.
+
+        Uses ``LLM_VISION_MODEL`` if set, else the configured chat model — which
+        must be vision-capable, or the provider returns an error we surface.
+        response_format is intentionally omitted (not all vision endpoints
+        accept it); we rely on the prompt + fence-stripping instead.
+        """
+        self._require_key()
+        model = settings.llm_vision_model or self.model
+        content = [
+            {"type": "text", "text": prompt},
+            {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{image_b64}"}},
+        ]
+        messages = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": content})
+        body = {"model": model, "messages": messages, "temperature": 0.2}
+        try:
+            resp = httpx.post(
+                f"{self.base_url}/chat/completions",
+                headers=self._headers(),
+                json=body,
+                timeout=settings.llm_timeout,
+            )
+            resp.raise_for_status()
+            raw = resp.json()["choices"][0]["message"]["content"]
+        except httpx.HTTPStatusError as e:
+            detail = e.response.text[:300]
+            raise LLMError(
+                f"{self.provider} HTTP {e.response.status_code} (is '{model}' "
+                f"vision-capable? set LLM_VISION_MODEL): {detail}"
+            ) from e
+        except (httpx.HTTPError, KeyError, IndexError, ValueError) as e:
+            raise LLMError(f"{self.provider} vision request failed: {e}") from e
+        try:
+            return json.loads(_strip_fences(raw))
+        except json.JSONDecodeError as e:
+            raise LLMError(f"{self.provider} did not return valid JSON: {raw[:200]}") from e
+
     def health(self) -> dict:
         self._require_key()
         available: list[str] = []

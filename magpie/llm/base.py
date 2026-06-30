@@ -21,4 +21,13 @@ class LLMClient(Protocol):
 
     def complete_json(self, prompt: str, system: str | None = None) -> dict | list: ...
 
+    def complete_vision_json(
+        self, prompt: str, image_b64: str, mime: str, system: str | None = None
+    ) -> dict | list:
+        """Read an image (base64) plus prompt and return parsed JSON.
+
+        Requires a vision-capable model; raises ``LLMError`` if unavailable.
+        """
+        ...
+
     def health(self) -> dict: ...

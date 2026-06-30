@@ -36,22 +36,21 @@ class OllamaClient:
             ) from e
         return [m.get("model") or m.get("name") for m in resp.get("models", [])]
 
-    def _resolve_model(self, available: list[str]) -> str:
-        """Match the configured model against pulled tags.
+    def _resolve_model(self, available: list[str], model: str | None = None) -> str:
+        """Match a model name against pulled tags (defaults to the chat model).
 
         Accepts an exact match, or a bare name that matches a single
         ``name:tag`` (e.g. ``llama3.1`` -> ``llama3.1:8b``).
         """
-        if self.model in available:
-            return self.model
-        matches = [m for m in available if m.split(":")[0] == self.model.split(":")[0]]
-        if len(matches) == 1:
-            return matches[0]
+        want = model or self.model
+        if want in available:
+            return want
+        matches = [m for m in available if m.split(":")[0] == want.split(":")[0]]
         if matches:
             return matches[0]
         raise OllamaError(
-            f"Model '{self.model}' is not pulled. Available: {available or 'none'}. "
-            f"Pull it with `ollama pull {self.model}`."
+            f"Model '{want}' is not pulled. Available: {available or 'none'}. "
+            f"Pull it with `ollama pull {want}`."
         )
 
     def health(self) -> dict:
@@ -85,6 +84,33 @@ class OllamaClient:
         import json
 
         raw = self.complete(prompt, system=system, json_mode=True)
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError as e:
+            raise OllamaError(f"Model did not return valid JSON: {raw[:200]}") from e
+
+    def complete_vision_json(
+        self, prompt: str, image_b64: str, mime: str, system: str | None = None
+    ) -> dict | list:
+        """Read an image with a local vision model (e.g. llama3.2-vision) -> JSON.
+
+        Uses ``LLM_VISION_MODEL`` if set, else defaults to ``llama3.2-vision``;
+        the model must be pulled or we raise an actionable OllamaError.
+        """
+        import json
+
+        want = settings.llm_vision_model or "llama3.2-vision"
+        available = self.available_models()
+        model = self._resolve_model(available, want)
+        messages = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": prompt, "images": [image_b64]})
+        try:
+            resp = self._client().chat(model=model, messages=messages, format="json")
+        except Exception as e:
+            raise OllamaError(f"Ollama vision chat failed for model '{model}': {e}") from e
+        raw = resp["message"]["content"]
         try:
             return json.loads(raw)
         except json.JSONDecodeError as e:

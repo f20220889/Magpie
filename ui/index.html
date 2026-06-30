@@ -125,6 +125,16 @@
     <!-- PROFILE / ONBOARD -->
     <section id="view-onboard" class="view">
       <p class="scribble">tell Magpie what you know</p>
+      <div class="resume-import">
+        <span class="resume-hint">have a resume? let Magpie read your skills</span>
+        <label class="resume-btn">
+          Import from resume
+          <input id="resume-file" type="file"
+                 accept=".pdf,.docx,.txt,.md,image/*" hidden />
+        </label>
+        <span class="resume-formats">PDF, Word, image or text</span>
+        <span id="resume-status" class="resume-status" hidden></span>
+      </div>
       <div id="profile-summary" class="profile-summary"></div>
       <form id="onboard-form" class="onboard">
         <label>Domains <small>(comma separated)</small>
@@ -144,6 +154,20 @@
       <div id="status-box" class="status-box">Checking…</div>
     </section>
   </main>
+
+  <!-- Resume skills verification dialog -->
+  <div id="skills-modal" class="modal" hidden>
+    <div class="modal-card">
+      <h2>Review your skills</h2>
+      <p class="modal-sub">Remove anything wrong, add what's missing, then save.
+        These are added to your existing skills — nothing is removed.</p>
+      <div id="skills-modal-body" class="skills-edit"></div>
+      <div class="modal-actions">
+        <button type="button" id="skills-cancel" class="btn-ghost">Cancel</button>
+        <button type="button" id="skills-save" class="btn-primary">Add to my skills</button>
+      </div>
+    </div>
+  </div>
 
   <script src="js/app.js"></script>
 </body>
