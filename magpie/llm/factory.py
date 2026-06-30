@@ -6,6 +6,7 @@ client. ``ollama`` stays the local default for development.
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 
 from magpie.config import settings
@@ -49,13 +50,47 @@ PROVIDERS: dict[str, _Preset] = {
 }
 
 
+def _is_hosted_env() -> bool:
+    """True on a hosting platform, where there is no local Ollama to reach.
+
+    Render sets ``RENDER`` on every service; ``MAGPIE_HOSTED`` is a generic
+    escape hatch for other hosts.
+    """
+    return bool(os.getenv("RENDER") or os.getenv("MAGPIE_HOSTED"))
+
+
+def _autodetect_hosted_provider() -> str | None:
+    """Pick a hosted provider whose API key is set (first match wins)."""
+    for name, preset in PROVIDERS.items():
+        if getattr(settings, preset.key_setting, ""):
+            return name
+    return None
+
+
 def get_llm() -> LLMClient:
-    """Return the LLM client for the configured provider."""
+    """Return the LLM client for the configured provider.
+
+    Ollama is the local-dev default. On a hosting platform there is no local
+    Ollama, so rather than failing against ``localhost`` we auto-select a hosted
+    provider when its API key is set (a deploy then only needs the key, not also
+    LLM_PROVIDER) — or raise an actionable error pointing at the real fix.
+    """
     name = (settings.llm_provider or "ollama").strip().lower()
     if name in ("ollama", "local", ""):
-        from magpie.llm.ollama_client import OllamaClient
+        if _is_hosted_env():
+            auto = _autodetect_hosted_provider()
+            if auto is None:
+                raise LLMError(
+                    "No LLM is configured for this deploy. Ollama only works "
+                    "locally; on a host set a free provider, e.g. "
+                    "LLM_PROVIDER=groq and GROQ_API_KEY=<key>, in the "
+                    "environment, then redeploy."
+                )
+            name = auto
+        else:
+            from magpie.llm.ollama_client import OllamaClient
 
-        return OllamaClient()
+            return OllamaClient()
     preset = PROVIDERS.get(name)
     if preset is None:
         raise LLMError(

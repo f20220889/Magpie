@@ -36,6 +36,37 @@ def test_factory_unknown_provider_raises(monkeypatch):
         get_llm()
 
 
+def test_factory_local_uses_ollama_when_not_hosted(monkeypatch):
+    monkeypatch.setattr(settings, "llm_provider", "ollama")
+    monkeypatch.delenv("RENDER", raising=False)
+    monkeypatch.delenv("MAGPIE_HOSTED", raising=False)
+    from magpie.llm.ollama_client import OllamaClient
+
+    assert isinstance(get_llm(), OllamaClient)
+
+
+def test_factory_hosted_autodetects_provider_from_key(monkeypatch):
+    # On a host with no explicit LLM_PROVIDER, a present API key selects it.
+    monkeypatch.setattr(settings, "llm_provider", "ollama")  # the default
+    for preset in PROVIDERS.values():
+        monkeypatch.setattr(settings, preset.key_setting, "")
+    monkeypatch.setattr(settings, "groq_api_key", "gsk_test")
+    monkeypatch.setenv("RENDER", "true")
+    client = get_llm()
+    assert isinstance(client, OpenAICompatClient)
+    assert client.provider == "groq"
+
+
+def test_factory_hosted_without_key_raises(monkeypatch):
+    # On a host with neither provider nor key, fail loudly (not "reach ollama").
+    monkeypatch.setattr(settings, "llm_provider", "ollama")
+    for preset in PROVIDERS.values():
+        monkeypatch.setattr(settings, preset.key_setting, "")
+    monkeypatch.setenv("RENDER", "true")
+    with pytest.raises(LLMError):
+        get_llm()
+
+
 def test_llm_model_override(monkeypatch):
     monkeypatch.setattr(settings, "llm_provider", "groq")
     monkeypatch.setattr(settings, "llm_model", "my-custom-model")

@@ -1,0 +1,29 @@
+# Render Blueprint — bakes in the global-deploy config so a deploy can't forget
+# it. Render reads this on a Blueprint deploy (New > Blueprint, or sync an
+# existing service to it). Only secrets (sync: false) are prompted; everything
+# else is set automatically. Python version comes from .python-version (3.12.11).
+services:
+  - type: web
+    name: magpie
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements-deploy.txt
+    startCommand: uvicorn magpie.web.server:app --host 0.0.0.0 --port $PORT
+    envVars:
+      # Hosted LLM (free tier). With these set the app never falls back to a
+      # local Ollama. Swap to gemini/openrouter/cerebras/mistral/together if you
+      # prefer — set the matching <PROVIDER>_API_KEY below instead of GROQ.
+      - key: LLM_PROVIDER
+        value: groq
+      - key: GROQ_API_KEY
+        sync: false          # paste your gsk_... key when prompted
+      # Keyless, dependency-free embeddings — no torch, fits Render free.
+      - key: EMBEDDING_PROVIDER
+        value: hash
+      # Secure cookies (the app is served over HTTPS on Render).
+      - key: COOKIE_SECURE
+        value: "true"
+      # Optional: a Postgres DSN for data that survives restarts (free: Neon /
+      # Supabase). Leave unset to use the ephemeral SQLite file.
+      - key: DATABASE_URL
+        sync: false
